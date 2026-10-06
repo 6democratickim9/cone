@@ -8,5 +8,3 @@ vite.config.d.ts
 .env
 .env.*
 !.env.example
-backend/data/*.json
-!backend/data/.gitkeep
