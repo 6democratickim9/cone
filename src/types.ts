@@ -44,7 +44,7 @@ export type Material = MaterialSnapshot & {
   custom: boolean
 }
 
-export type PhotoAttachment = { id: string; name: string; type: string; size: number; data?: Blob }
+export type PhotoAttachment = { id: string; name: string; type: string; size: number; data?: string }
 
 export type FiringTest = {
   id: string
@@ -62,9 +62,9 @@ export type FiringTest = {
 }
 
 export type ConeBackup = {
-  schemaVersion: 1
+  schemaVersion: 1 | 2
   exportedAt: string
   calculations: Calculation[]
   materials: Material[]
-  firingTests: Array<Omit<FiringTest, 'photos'> & { photos: Array<Omit<PhotoAttachment, 'data'>> }>
+  firingTests: FiringTest[]
 }

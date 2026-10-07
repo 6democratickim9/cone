@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
+import { Share } from '@capacitor/share'
 import {
   ArrowRight, Beaker, Bookmark, Check, ChevronDown, Download, Flame, FlaskConical,
   History, Home, Library, Menu, Plus, RotateCcw, Search, SlidersHorizontal, Sparkles,
@@ -33,6 +36,15 @@ function ingredientFromMaterial(material: Material, amount?: number): Ingredient
 }
 
 const formatGram = (value: number) => `${value.toFixed(2)}g`
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
 
 export default function App() {
   const [active, setActive] = useState('계산기')
@@ -119,10 +131,22 @@ export default function App() {
   }
 
   const exportBackup = async () => {
-    const backup = await coneDB.export()
-    const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }))
-    const anchor = document.createElement('a'); anchor.href = url; anchor.download = `cone-backup-${new Date().toISOString().slice(0, 10)}.json`; anchor.click()
-    URL.revokeObjectURL(url); showToast('JSON 백업 파일을 만들었습니다')
+    try {
+      const backup = await coneDB.export()
+      const filename = `cone-backup-${new Date().toISOString().slice(0, 10)}.json`
+      const data = JSON.stringify(backup, null, 2)
+      if (Capacitor.isNativePlatform()) {
+        const file = await Filesystem.writeFile({ path: filename, data, directory: Directory.Cache, encoding: Encoding.UTF8 })
+        await Share.share({ title: 'CONE 전체 백업', text: '레시피, 재료, 소성 기록과 사진이 포함된 백업입니다.', url: file.uri, dialogTitle: '백업 파일 저장 또는 공유' })
+      } else {
+        const url = URL.createObjectURL(new Blob([data], { type: 'application/json' }))
+        const anchor = document.createElement('a'); anchor.href = url; anchor.download = filename; anchor.click()
+        URL.revokeObjectURL(url)
+      }
+      showToast('전체 백업 파일을 만들었습니다')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '백업 파일을 만들지 못했습니다.')
+    }
   }
 
   const importBackup = async (file?: File) => {
@@ -226,5 +250,5 @@ function MaterialForm({ close, save }: { close: () => void; save: (m: Material) 
 
 function FiringForm({ recipe, close, save }: { recipe: Calculation; close: () => void; save: (t: FiringTest) => void }) {
   const [name, setName] = useState('1차 테스트'); const [clay, setClay] = useState(''); const [temperature, setTemperature] = useState(1250); const [atmosphere, setAtmosphere] = useState<FiringTest['atmosphere']>('산화'); const [kiln, setKiln] = useState(''); const [hours, setHours] = useState(0); const [notes, setNotes] = useState(''); const [photos, setPhotos] = useState<File[]>([])
-  return <Modal close={close}><div className="modal-head"><div><p className="eyebrow">FIRING TEST · {recipe.title}</p><h2>소성 기록</h2></div><button className="icon-button" onClick={close}><X/></button></div><div className="form-grid"><label>테스트명<input value={name} onChange={(e) => setName(e.target.value)}/></label><label>사용한 흙·소지<input value={clay} onChange={(e) => setClay(e.target.value)}/></label><label>최고 온도 ℃<input type="number" value={temperature} onChange={(e) => setTemperature(Number(e.target.value))}/></label><label>분위기<select value={atmosphere} onChange={(e) => setAtmosphere(e.target.value as FiringTest['atmosphere'])}><option>산화</option><option>환원</option><option>기타</option></select></label><label>가마<input value={kiln} onChange={(e) => setKiln(e.target.value)}/></label><label>총 소성 시간<input type="number" value={hours} onChange={(e) => setHours(Number(e.target.value))}/></label><label className="full">사진<input type="file" accept="image/*" multiple onChange={(e) => setPhotos(Array.from(e.target.files ?? []))}/></label><label className="full">결과 메모<textarea value={notes} onChange={(e) => setNotes(e.target.value)}/></label></div><p className="local-note"><WifiOff size={14}/> 사진 원본은 현재 기기에만 저장되며 JSON 백업에는 파일명만 포함됩니다.</p><button className="primary-button" disabled={!name.trim()} onClick={() => save({ id: crypto.randomUUID(), recipeId: recipe.id, name, date: new Date().toISOString(), clay, thickness: '', peakTemperature: temperature, atmosphere, kiln, durationHours: hours, notes, photos: photos.map((photo) => ({ id: crypto.randomUUID(), name: photo.name, type: photo.type, size: photo.size, data: photo })) })}>소성 기록 저장</button></Modal>
+  return <Modal close={close}><div className="modal-head"><div><p className="eyebrow">FIRING TEST · {recipe.title}</p><h2>소성 기록</h2></div><button className="icon-button" onClick={close}><X/></button></div><div className="form-grid"><label>테스트명<input value={name} onChange={(e) => setName(e.target.value)}/></label><label>사용한 흙·소지<input value={clay} onChange={(e) => setClay(e.target.value)}/></label><label>최고 온도 ℃<input type="number" value={temperature} onChange={(e) => setTemperature(Number(e.target.value))}/></label><label>분위기<select value={atmosphere} onChange={(e) => setAtmosphere(e.target.value as FiringTest['atmosphere'])}><option>산화</option><option>환원</option><option>기타</option></select></label><label>가마<input value={kiln} onChange={(e) => setKiln(e.target.value)}/></label><label>총 소성 시간<input type="number" value={hours} onChange={(e) => setHours(Number(e.target.value))}/></label><label className="full">사진<input type="file" accept="image/*" multiple onChange={(e) => setPhotos(Array.from(e.target.files ?? []))}/></label><label className="full">결과 메모<textarea value={notes} onChange={(e) => setNotes(e.target.value)}/></label></div><p className="local-note"><WifiOff size={14}/> 사진 원본도 기기에 저장되며 전체 백업 파일에 함께 포함됩니다.</p><button className="primary-button" disabled={!name.trim()} onClick={async () => save({ id: crypto.randomUUID(), recipeId: recipe.id, name, date: new Date().toISOString(), clay, thickness: '', peakTemperature: temperature, atmosphere, kiln, durationHours: hours, notes, photos: await Promise.all(photos.map(async (photo) => ({ id: crypto.randomUUID(), name: photo.name, type: photo.type, size: photo.size, data: await fileToDataUrl(photo) }))) })}>소성 기록 저장</button></Modal>
 }
