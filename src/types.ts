@@ -42,6 +42,8 @@ export type Material = MaterialSnapshot & {
   id: string
   kind: IngredientKind
   custom: boolean
+  lastUsedAt?: string
+  useCount?: number
 }
 
 export type PhotoAttachment = { id: string; name: string; type: string; size: number; data?: string }
